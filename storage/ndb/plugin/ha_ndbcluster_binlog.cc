@@ -125,6 +125,9 @@ void ndb_index_stat_restart();
 
 extern Ndb_cluster_connection *g_ndb_cluster_connection;
 
+/* Number of schema distribution protocol participants */
+static std::atomic_int g_subscriber_count{0};
+
 /*
   Timeout for syncing schema events between
   mysql servers, and between mysql server and the binlog
@@ -1324,6 +1327,16 @@ class Ndb_schema_dist_data {
     return subscriber_bitmap;
   }
 
+  void publish_subscriber_count(int count) const {
+    g_subscriber_count.store(count);
+  }
+
+  void publish_subscriber_count() const {
+    std::unordered_set<uint32> subscribers;
+    get_subscriber_list(subscribers);
+    publish_subscriber_count(subscribers.size());
+  }
+
   // Holds the new key for a table to be renamed
   struct NDB_SHARE_KEY *m_prepared_rename_key;
 
@@ -1362,6 +1375,7 @@ class Ndb_schema_dist_data {
       delete subscriber_bitmap;
     }
     m_subscriber_bitmaps.clear();
+    publish_subscriber_count(0);
 
     // Release the prepared rename key, it's very unlikely
     // that the key is still around here, but just in case
@@ -1389,6 +1403,7 @@ class Ndb_schema_dist_data {
 
       ndb_log_verbose(19, "Subscribers[%d]: %s", data_node_id,
                       subscribers->to_string().c_str());
+      publish_subscriber_count();
     }
   }
 
@@ -1403,6 +1418,7 @@ class Ndb_schema_dist_data {
 
       ndb_log_verbose(19, "Subscribers[%d]: %s", data_node_id,
                       subscribers->to_string().c_str());
+      publish_subscriber_count();
     }
   }
 
@@ -1417,6 +1433,7 @@ class Ndb_schema_dist_data {
 
       ndb_log_verbose(19, "Subscribers[%d]: %s", data_node_id,
                       subscribers->to_string().c_str());
+      publish_subscriber_count();
     }
   }
 
@@ -1426,6 +1443,7 @@ class Ndb_schema_dist_data {
       Node_subscribers *subscribers = it.second;
       subscribers->clear_all();
     }
+    publish_subscriber_count(0);
   }
 
   /**
@@ -7856,6 +7874,14 @@ err:
   log_info("Stopped");
 
   DBUG_PRINT("exit", ("ndb_binlog_thread"));
+}
+
+int ndbcluster_binlog_get_schema_participant_count(THD *, SHOW_VAR *var,
+                                                   char *buf) {
+  var->type = SHOW_INT;
+  var->value = buf;
+  *(pointer_cast<int *>(buf)) = g_subscriber_count.load();
+  return 0;
 }
 
 /*
