@@ -3550,6 +3550,18 @@ void Qmgr::checkStartInterface(Signal *signal, NDB_TICKS now) {
                                    nodePtr.p->m_failconf_blocks[3],
                                    nodePtr.p->m_failconf_blocks[4]);
               warningEvent("%s", buf);
+
+              /* Ask delayed block(s) to explain themselves */
+              for (Uint32 i = 0;
+                   i < NDB_ARRAY_SIZE(nodePtr.p->m_failconf_blocks); i++) {
+                if (nodePtr.p->m_failconf_blocks[i] != 0) {
+                  signal->theData[0] = DumpStateOrd::DihTcSumaNodeFailCompleted;
+                  signal->theData[1] = nodePtr.i;
+                  const Uint32 dstRef =
+                      numberToRef(nodePtr.p->m_failconf_blocks[i], 0);
+                  sendSignal(dstRef, GSN_DUMP_STATE_ORD, signal, 2, JBB);
+                }
+              }
             }
           }
         }
