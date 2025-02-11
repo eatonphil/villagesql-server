@@ -166,7 +166,7 @@ class Paths {
 
   static const std::string generateLogFileName() {
     char timestamp[dateFormatSize];
-    const time_t now = time(0);
+    const time_t now = time(nullptr);
     (void)strftime(timestamp, dateFormatSize, dateFormat, localtime(&now));
     return logPrefix() + timestamp + "_";
   }
