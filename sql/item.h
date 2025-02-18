@@ -3595,6 +3595,15 @@ inline bool WalkItem(Item *item, enum_walk walk, T &&functor) {
 }
 
 /**
+   Overload for const 'item' and functor taking 'const Item*' argument.
+*/
+template <class T>
+inline bool WalkItem(const Item *item, enum_walk walk, T &&functor) {
+  auto to_const = [&](const Item *descendant) { return functor(descendant); };
+  return WalkItem(const_cast<Item *>(item), walk, to_const);
+}
+
+/**
   Same as WalkItem, but for Item::compile(). Use as e.g.:
 
   Item *item = CompileItem(root_item,

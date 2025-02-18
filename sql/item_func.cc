@@ -8192,6 +8192,8 @@ bool Item_func_sp::val_json(Json_wrapper *result) {
 bool Item_func_sp::execute() {
   THD *thd = current_thd;
 
+  assert(!thd->lex->is_explain() || thd->lex->is_explain_analyze);
+
   Internal_error_handler_holder<View_error_handler, Table_ref> view_handler(
       thd, context->view_error_handler, context->view_error_handler_arg);
 
