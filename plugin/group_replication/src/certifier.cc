@@ -926,6 +926,8 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
     Update parallel applier indexes.
   */
   if (!local_transaction) {
+    bool is_empty_transaction = false;
+
     /*
       'CREATE TABLE ... AS SELECT' is considered a DML, though in reality it
       is DDL + DML, which write-sets do not capture all dependencies.
@@ -938,7 +940,18 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
       update_parallel_applier_last_committed_global = true;
     }
 
-    if (!has_write_set || update_parallel_applier_last_committed_global) {
+    /*
+      Empty transactions, despite not having write-set, can be
+      applied in parallel with any other transaction.
+      Empty transactions are assigned `last_committed = -1` by GR
+      before send.
+    */
+    else if (!has_write_set && -1 == gle->last_committed) {
+      is_empty_transaction = true;
+    }
+
+    if (!is_empty_transaction &&
+        (!has_write_set || update_parallel_applier_last_committed_global)) {
       /*
         DDL does not have write-set, so we need to ensure that it
         is applied without any other transaction in parallel.
@@ -953,7 +966,9 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
     assert(gle->last_committed < gle->sequence_number);
 
     update_parallel_applier_indexes(
-        !has_write_set || update_parallel_applier_last_committed_global, true);
+        (!is_empty_transaction &&
+         (!has_write_set || update_parallel_applier_last_committed_global)),
+        true);
   }
 
 end:
