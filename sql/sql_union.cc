@@ -876,6 +876,18 @@ bool Query_expression::prepare(THD *thd, Query_result *sel_result,
     for (size_t i = 0; i < types.size(); i++)
       types[i]->set_nullable(nullable[i]);
   }
+  if (thd->lex->is_explain()) {
+    WalkQueryExpression(this,
+                        enum_walk::SUBQUERY_POSTFIX,  // Use SUBQUERY_POSTFIX to
+                                                      // traverse subqueries
+                        [this](Item *item) {
+                          if (item->has_stored_program()) {
+                            this->m_has_stored_program = true;
+                            return true;  // Stop walking
+                          }
+                          return false;  // Continue walking
+                        });
+  }
 
   // Query blocks are prepared, update the state
   set_prepared();
