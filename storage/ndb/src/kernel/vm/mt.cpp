@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2022, Oracle and/or its affiliates.
+/* Copyright (c) 2008, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -8304,9 +8304,25 @@ FastScheduler::dumpSignalMemory(Uint32 thr_no, FILE* out)
       signal.header.theReceiversBlockNumber &= NDBMT_BLOCK_MASK;
 
     const Uint32 *posptr = reinterpret_cast<const Uint32 *>(s);
-    signal.m_sectionPtrI[0] = posptr[siglen + 0];
-    signal.m_sectionPtrI[1] = posptr[siglen + 1];
-    signal.m_sectionPtrI[2] = posptr[siglen + 2];
+    signal.m_sectionPtrI[0] = RNIL;
+    signal.m_sectionPtrI[1] = RNIL;
+    signal.m_sectionPtrI[2] = RNIL;
+    switch (s->m_noOfSections) {
+      case 3:
+        signal.m_sectionPtrI[2] = posptr[siglen + 2];
+        [[fallthrough]];
+      case 2:
+        signal.m_sectionPtrI[1] = posptr[siglen + 1];
+        [[fallthrough]];
+      case 1:
+        signal.m_sectionPtrI[0] = posptr[siglen + 0];
+        [[fallthrough]];
+      case 0:
+        break;
+      default:
+        /* Out of range - ignore */
+        break;
+    };
     bool prioa = signalSequence[seq_end].prioa;
 
     /* Make sure to display clearly when there is a gap in the dump. */
