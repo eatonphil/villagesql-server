@@ -8310,13 +8310,13 @@ FastScheduler::dumpSignalMemory(Uint32 thr_no, FILE* out)
     switch (s->m_noOfSections) {
       case 3:
         signal.m_sectionPtrI[2] = posptr[siglen + 2];
-        [[fallthrough]];
+        /* Fall through */
       case 2:
         signal.m_sectionPtrI[1] = posptr[siglen + 1];
-        [[fallthrough]];
+        /* Fall through */
       case 1:
         signal.m_sectionPtrI[0] = posptr[siglen + 0];
-        [[fallthrough]];
+        /* Fall through */
       case 0:
         break;
       default:
