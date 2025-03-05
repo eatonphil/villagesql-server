@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -280,10 +280,35 @@ void NDBT_Context::setNumLoops(int _loops){
   loops = _loops;
 }
 
+void NDBT_Context::getRecordSubRange(int records,
+                                     int rangeCount,
+                                     int rangeId,
+                                     int& startRecord,
+                                     int& stopRecord)
+{
+  int recordsPerStep = records / rangeCount;
+  if (recordsPerStep == 0)
+  {
+    recordsPerStep = 1;
+  }
+  startRecord = rangeId * recordsPerStep;
+  stopRecord = startRecord + recordsPerStep;
+
+  if (stopRecord > records)
+  {
+    stopRecord = records;
+  }
+  if (startRecord >= records)
+  {
+    startRecord = stopRecord = 0;
+  }
+}
+
 NDBT_Step::NDBT_Step(NDBT_TestCase* ptest, const char* pname,
                      NDBT_TESTFUNC* pfunc) :
   m_ctx(NULL), name(pname), func(pfunc),
-  testcase(ptest), step_no(-1), m_ndb(NULL)
+  testcase(ptest), step_no(-1), step_type_no(0),
+  step_type_count(1), m_ndb(NULL)
 {
 }
 
@@ -389,9 +414,14 @@ NDBT_Context* NDBT_Step::getContext(){
 
 
 NDBT_ParallelStep::NDBT_ParallelStep(NDBT_TestCase* ptest, 
-				     const char* pname, 
-				     NDBT_TESTFUNC* pfunc)
+                                     const char* pname,
+                                     NDBT_TESTFUNC* pfunc,
+                                     int num,
+                                     int count)
   : NDBT_Step(ptest, pname, pfunc) {
+  require(num < count);
+  step_type_no = num;
+  step_type_count = count;
 }
 NDBT_Verifier::NDBT_Verifier(NDBT_TestCase* ptest, 
 			     const char* pname, 
