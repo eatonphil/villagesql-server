@@ -24836,19 +24836,16 @@ void Dbdict::createFK_toCreateTrigger(Signal *signal, SchemaOpPtr op_ptr) {
       g_fkTriggerTmpl[createFKPtr.p->m_sub_create_trigger];
 
   Uint32 tableId = RNIL;
-  Uint32 indexId = RNIL;
   Uint32 triggerId = RNIL;
   Uint32 triggerNo = RNIL;
   switch (createFKPtr.p->m_sub_create_trigger) {
     case 0:
       tableId = fk_ptr.p->m_parentTableId;
-      indexId = fk_ptr.p->m_parentIndexId;
       triggerId = fk_ptr.p->m_parentTriggerId;
       triggerNo = 0;
       break;
     case 1:
       tableId = fk_ptr.p->m_childTableId;
-      indexId = fk_ptr.p->m_childIndexId;
       triggerId = fk_ptr.p->m_childTriggerId;
       triggerNo = 1;
       break;
@@ -29388,7 +29385,6 @@ void Dbdict::slave_writeSchema_conf(Signal *signal, Uint32 trans_key,
   SchemaTransPtr trans_ptr;
   ndbrequire(findSchemaTrans(trans_ptr, trans_key));
 
-  bool release = false;
   if (!trans_ptr.p->m_isMaster) {
     switch (trans_ptr.p->m_state) {
       case SchemaTrans::TS_FLUSH_PREPARE:
@@ -29418,7 +29414,6 @@ void Dbdict::slave_writeSchema_conf(Signal *signal, Uint32 trans_key,
       }
       case SchemaTrans::TS_ENDING:
         jam();
-        release = true;
         break;
       default:
         jamLine(trans_ptr.p->m_state);
@@ -31143,12 +31138,8 @@ void Dbdict::check_consistency_index(TableRecordPtr indexPtr) {
   ndbrequire(ok);
   check_consistency_table(tablePtr);
 
-  bool is_unique_index = false;
   switch (indexPtr.p->tableType) {
     case DictTabInfo::UniqueHashIndex:
-      jam();
-      is_unique_index = true;
-      break;
     case DictTabInfo::OrderedIndex:
       jam();
       break;
