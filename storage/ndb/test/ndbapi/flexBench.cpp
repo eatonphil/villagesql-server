@@ -594,7 +594,6 @@ static void *flexBenchThread(void *pArg) {
   NdbConnection *pTrans = NULL;
   const NdbOperation **pOps = NULL;
   StartType tType;
-  StartType tSaveType;
   int *attrValue = NULL;
   int *attrRefValue = NULL;
   int check = 0;
@@ -792,7 +791,6 @@ static void *flexBenchThread(void *pArg) {
     }  // if
 
     tType = pThreadData->threadStart;
-    tSaveType = tType;
     pThreadData->threadStart = stIdle;
 
     // Start transaction, type of transaction
