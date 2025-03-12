@@ -1718,6 +1718,8 @@ class Query_block : public Query_term {
   */
   bool accept(Select_lex_visitor *visitor);
 
+  void prune_sj_exprs(Item_func_eq *item, mem_root_deque<Table_ref *> *nest);
+
   /**
     Cleanup this subtree (this Query_block and all nested Query_blockes and
     Query_expressions).
@@ -2208,7 +2210,7 @@ class Query_block : public Query_term {
   ///  Build semijoin condition for th query block
   bool build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
                      Query_block *subq_query_block, table_map outer_tables_map,
-                     Item **sj_cond);
+                     Item **sj_cond, bool *simple_const);
   bool decorrelate_condition(Semijoin_decorrelation &sj_decor,
                              Table_ref *join_nest);
 

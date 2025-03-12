@@ -2442,20 +2442,19 @@ void Query_block::clear_sj_expressions(NESTED_JOIN *nested_join) {
   @param nested_join    Join nest
   @param subq_query_block    Query block for the subquery
   @param outer_tables_map Map of tables from original outer query block
-  @param[out] sj_cond   Semi-join condition to be constructed
-
+  @param[out]    sj_cond   Semi-join condition to be constructed
+                           Contains non-equalities on input.
+  @param[out]    simple_const true if the returned semi-join condition is
+                              a simple true or false predicate, false otherwise.
   @return false if success, true if error
 */
 bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
                                 Query_block *subq_query_block,
-                                table_map outer_tables_map, Item **sj_cond) {
-  if (nested_join->sj_inner_exprs.empty()) {
-    // Semi-join materialization requires a key, push a constant integer item
-    Item *const_item = new Item_int(1);
-    if (const_item == nullptr) return true;
-    nested_join->sj_inner_exprs.push_back(const_item);
-    nested_join->sj_outer_exprs.push_back(const_item);
-  }
+                                table_map outer_tables_map, Item **sj_cond,
+                                bool *simple_const) {
+  *simple_const = false;
+
+  Item *new_cond = nullptr;
 
   auto ii = nested_join->sj_inner_exprs.begin();
   auto oi = nested_join->sj_outer_exprs.begin();
@@ -2502,13 +2501,8 @@ bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
           Remove the expression from inner/outer expression list if the
           const condition evaluates to true as Item_cond::fix_fields will
           remove the condition later.
-          Do the above if this is not the last expression in the list.
-          Semijoin processing expects at least one inner/outer expression
-          in the list if there is a sj_nest present.
         */
-        if (nested_join->sj_inner_exprs.size() != 1) {
-          should_remove = true;
-        }
+        should_remove = true;
       } else {
         /*
           Remove all the expressions in inner/outer expression list if
@@ -2520,11 +2514,10 @@ bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
         Item *new_item = new Item_func_false();
         if (new_item == nullptr) return true;
         (*sj_cond) = new_item;
-        break;
+        *simple_const = true;
+        return false;
       }
     }
-    (*sj_cond) = and_items(*sj_cond, predicate);
-    if (*sj_cond == nullptr) return true; /* purecov: inspected */
     /*
       If the selected expression has a reference to our query block, add it as
       a non-trivially correlated reference (to avoid materialization).
@@ -2544,9 +2537,29 @@ bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
       ii = nested_join->sj_inner_exprs.erase(ii);
       oi = nested_join->sj_outer_exprs.erase(oi);
     } else {
+      new_cond = and_items(new_cond, predicate);
+      if (new_cond == nullptr) return true; /* purecov: inspected */
+
       ++ii, ++oi;
     }
   }
+  /*
+    Semijoin processing expects at least one inner/outer expression
+    in the list if there is a sj_nest present. This is required for semi-join
+    materialization and loose scan.
+  */
+  if (nested_join->sj_inner_exprs.empty()) {
+    Item *const_item = new Item_int(1);
+    if (const_item == nullptr) return true;
+    nested_join->sj_inner_exprs.push_back(const_item);
+    nested_join->sj_outer_exprs.push_back(const_item);
+    new_cond = new Item_func_true();
+    if (new_cond == nullptr) return true;
+    *simple_const = true;
+  }
+  (*sj_cond) = and_items(*sj_cond, new_cond);
+  if (*sj_cond == nullptr) return true; /* purecov: inspected */
+
   return false;
 }
 
@@ -3302,8 +3315,9 @@ bool Query_block::convert_subquery_to_semijoin(
   });
 
   // Build semijoin condition using the inner/outer expression list
+  bool simple_cond;
   if (build_sj_cond(thd, nested_join, subq_query_block, outer_tables_map,
-                    &sj_cond))
+                    &sj_cond, &simple_cond))
     return true;
 
   // Processing requires a non-empty semi-join condition:
@@ -3358,8 +3372,10 @@ bool Query_block::convert_subquery_to_semijoin(
   // TODO fix QT_
   DBUG_EXECUTE("where", print_where(thd, sj_cond, "SJ-COND", QT_ORDINARY););
 
-  if (do_aj) { /* Condition remains attached to inner table, as for LEFT JOIN
-                */
+  Item *cond = nullptr;
+  if (do_aj) {
+    // Condition remains attached to inner table, as for LEFT JOIN
+    cond = sj_cond;
   } else if (emb_tbl_nest) {
     // Inject semi-join condition into parent's join condition
     emb_tbl_nest->set_join_cond(and_items(emb_tbl_nest->join_cond(), sj_cond));
@@ -3369,37 +3385,28 @@ bool Query_block::convert_subquery_to_semijoin(
         emb_tbl_nest->join_cond()->fix_fields(thd,
                                               emb_tbl_nest->join_cond_ref()))
       return true;
+    cond = emb_tbl_nest->join_cond();
   } else {
     // Inject semi-join condition into parent's WHERE condition
     m_where_cond = and_items(m_where_cond, sj_cond);
     if (m_where_cond == nullptr) return true;
     m_where_cond->apply_is_true();
     if (m_where_cond->fix_fields(thd, &m_where_cond)) return true;
+    cond = m_where_cond;
   }
 
-  Item *cond = emb_tbl_nest ? emb_tbl_nest->join_cond() : m_where_cond;
-  if (cond && cond->const_item() &&
-      !cond->walk(&Item::is_non_const_over_literals, enum_walk::POSTFIX,
-                  nullptr)) {
-    bool cond_value = true;
-    if (simplify_const_condition(thd, &cond, false, &cond_value)) return true;
-    if (!cond_value) {
-      /*
-        Parent's condition is always FALSE. Thus:
-        (a) the value of the anti/semi-join condition has no influence on the
-        result
-        (b) we don't need to set up lookups (for loosescan or materialization)
-        (c) for a semi-join, the semi-join condition is already lost (it was
-        in parent's condition, which has been replaced with FALSE); the
-        outer/inner sj expressions are Items which point into the SJ
-        condition, so at 2nd execution they won't be fixed => clearing them
-        prevents a bug.
-        (d) for an anti-join, the join condition remains in
-        sj_nest->join_cond() and will possibly be evaluated. (c) doesn't hold,
-        but (a) and (b) do.
-      */
-      clear_sj_expressions(nested_join);
-    }
+  /*
+    If the current semi-join or anti-join condition is always TRUE or
+    always FALSE:
+    (a) there is no need to set up lookups (for loosescan or materialization).
+    (b) if some predicates were eliminated as part of const value optimization,
+        their expressions are still in the inner/outer expression list
+        and must be removed.
+    (If a "simple condition" was added in build_sj_cond(), this is not necessary
+     since the expressions were constant values and are safe to keep.)
+  */
+  if (cond != nullptr && cond->const_item() && !simple_cond) {
+    clear_sj_expressions(nested_join);
   }
 
   if (subq_query_block->ftfunc_list->elements &&
@@ -5229,6 +5236,43 @@ bool validate_gc_assignment(const mem_root_deque<Item *> &fields,
     }
   }
   return false;
+}
+
+/// Minion of prune_sj_exprs, q.v.
+static void prune_sj_exprs_from_nest(Item_func_eq *item, Table_ref *nest) {
+  auto it1 = nest->nested_join->sj_outer_exprs.begin();
+  auto it2 = nest->nested_join->sj_inner_exprs.begin();
+  while (it1 != nest->nested_join->sj_outer_exprs.end() &&
+         it2 != nest->nested_join->sj_inner_exprs.end()) {
+    Item *outer = *it1;
+    Item *inner = *it2;
+    if ((outer == item->arguments()[0] && inner == item->arguments()[1]) ||
+        (outer == item->arguments()[1] && inner == item->arguments()[0])) {
+      nest->nested_join->sj_outer_exprs.erase(it1);
+      nest->nested_join->sj_inner_exprs.erase(it2);
+      break;
+    }
+    it1++;
+    it2++;
+  }
+}
+
+/**
+  Recursively look for removed item inside any nested joins'
+  sj_{inner,outer}_exprs. If target for removal is found, remove such entries
+  because the corresponding equality condition has been eliminated.
+
+  @param item   the equality which is being removed.
+  @param nest   the table nest (nullptr means top nest)
+*/
+void Query_block::prune_sj_exprs(Item_func_eq *item,
+                                 mem_root_deque<Table_ref *> *nest) {
+  if (nest == nullptr) nest = &m_table_nest;
+  for (Table_ref *table : *nest) {
+    if (table->nested_join == nullptr) continue;
+    prune_sj_exprs_from_nest(item, table);
+    prune_sj_exprs(item, &table->nested_join->m_tables);
+  }
 }
 
 /**
