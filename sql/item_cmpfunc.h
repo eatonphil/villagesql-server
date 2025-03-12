@@ -1065,6 +1065,7 @@ class Item_func_eq final : public Item_eq_base {
   Item *negated_item() override;
   bool equality_substitution_analyzer(uchar **) override { return true; }
   Item *equality_substitution_transformer(uchar *arg) override;
+  bool clean_up_after_removal(uchar *arg) override;
   bool gc_subst_analyzer(uchar **) override { return true; }
 
   float get_filtering_effect(THD *thd, table_map filter_for_table,

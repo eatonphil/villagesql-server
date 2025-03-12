@@ -2881,6 +2881,7 @@ class Item : public Parse_tree_node {
     Query_block *const m_root;
 
     friend class Item;
+    friend class Item_func_eq;
     friend class Item_sum;
     friend class Item_subselect;
     friend class Item_ref;
