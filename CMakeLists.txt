@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -710,6 +710,13 @@ ADD_SUBDIRECTORY(libbinlogstandalone)
 # gcc9 will not allow CTORs to do memset(this, 0, sizeof(*this));
 IF(CMAKE_COMPILER_IS_GNUCXX AND NOT GXX_VERSION VERSION_LESS 9)
   STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-class-memaccess")
+ENDIF()
+
+# Modern gcc versions will reject e.g. Bitmap<64>()
+# saying it is illegal in C++20
+MY_CHECK_CXX_COMPILER_WARNING("-Wtemplate-id-cdtor" HAS_WARN_FLAG)
+IF(HAS_WARN_FLAG)
+  STRING_APPEND(CMAKE_CXX_FLAGS " ${HAS_WARN_FLAG}")
 ENDIF()
 
 IF(NOT WITHOUT_SERVER)
