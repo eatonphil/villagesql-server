@@ -1,4 +1,4 @@
-# Copyright (c) 2012, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2012, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -26,7 +26,11 @@ SET(FEATURE_SET "community" CACHE STRING
 )
 
 IF(FEATURE_SET AND NOT WITHOUT_SERVER)
-  SET(WITH_EMBEDDED_SERVER ON CACHE BOOL "")
+  # embedded server cannot be built,
+  # MERGE_CONVENIENCE_LIBRARIES depends on unsupported policies
+  IF(CMAKE_VERSION VERSION_LESS "4")
+    SET(WITH_EMBEDDED_SERVER ON CACHE BOOL "")
+  ENDIF()
 
   # Set these ON by default. They can be disabled with
   # -DWITHOUT_${eng}_STORAGE_ENGINE
