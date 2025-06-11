@@ -2133,8 +2133,6 @@ private:
   void checkScanActiveInFailedLqh(Signal* signal,
 				  Uint32 scanPtrI,
 				  Uint32 failedNodeId);
-  void checkScanFragList(Signal*, Uint32 failedNodeId, ScanRecord * scanP, 
-                         Local_ScanFragRec_dllist::Head&);
 
   void nodeFailCheckTransactions(Signal*,Uint32 transPtrI,Uint32 failedNodeId);
   void ndbdFailBlockCleanupCallback(Signal* signal, Uint32 failedNodeId, Uint32 ignoredRc);
@@ -2599,6 +2597,7 @@ private:
 
 #ifndef DBTC_STATE_EXTRACT
   void dump_trans(ApiConnectRecordPtr transPtr);
+  void dump_scan_state(ApiConnectRecordPtr scanTransPtr);
   bool hasOp(ApiConnectRecordPtr transPtr, Uint32 op);
 #endif
 };
