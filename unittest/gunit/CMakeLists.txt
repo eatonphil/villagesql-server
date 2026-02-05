@@ -1,4 +1,5 @@
 # Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+# Copyright (c) 2026 VillageSQL Contributors
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -345,6 +346,7 @@ SET(SQL_GUNIT_LIB_SOURCE
 
 ADD_LIBRARY(sqlgunitlib STATIC ${SQL_GUNIT_LIB_SOURCE})
 ADD_DEPENDENCIES(sqlgunitlib GenError)
+TARGET_LINK_LIBRARIES(sqlgunitlib PRIVATE extra::rapidjson)
 SET_TARGET_PROPERTIES(sqlgunitlib
   PROPERTIES COMPILE_DEFINITIONS "${DISABLE_PSI_DEFINITIONS}"
 )
@@ -353,7 +355,7 @@ MYSQL_ADD_EXECUTABLE(merge_small_tests-t ${ALL_SMALL_TESTS}
   ADD_TEST merge_small_tests
   COMPILE_DEFINITIONS ${DISABLE_PSI_DEFINITIONS}
   ENABLE_EXPORTS
-  LINK_LIBRARIES sqlgunitlib gunit_small extra::rapidjson extra::boost
+  LINK_LIBRARIES sqlgunitlib gunit_small extra::rapidjson extra::boost server_unittest_library
   )
 DOWNGRADE_STRINGOP_WARNINGS(merge_small_tests-t)
 
@@ -441,3 +443,4 @@ ADD_SUBDIRECTORY(locks)
 ADD_SUBDIRECTORY(changestreams)
 ADD_SUBDIRECTORY(libs/utils)
 ADD_SUBDIRECTORY(libs/serialization)
+ADD_SUBDIRECTORY(villagesql)
